@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shared Things</title>
+    <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.1/themes/base/jquery-ui.css" />
+    <script src="http://code.jquery.com/jquery-1.9.1.js"></script>
+    <script src="http://code.jquery.com/ui/1.10.1/jquery-ui.js"></script>
+    <script src="lib/jquery.ui.touch-punch.min.js"></script> <!-- http://touchpunch.furf.com/ -->
+    <style>
+      .draggable { position: fixed; } 
+    </style>
+
+    <script src="utilities.js"></script>
+    <script>
+  		//Time interval for retreving from database and updating animation.
+  		var retreivingInterval = 500;
+      //newPositions will be cleared during updateDB(). Do not store permanent local values here.
+      var newPositions = {};
+		  
+      //For storing local values that will not be cleared.
+      // var objectMoving = "";
+      var movementState = {
+        // dragging: {},
+        //x : [false, false, false, false, false],
+        //o : [false, false, false, false, false],
+        lastDate: {}
+      };
+
+      function logDrag(event, ui){
+        var time = new Date().getTime();
+        newPositions[event.target.id] = {"x": ui.position.left, "y": ui.position.top, "lastDate":time};
+        set_motionStop_bufferTime(event.target.id, time);
+      }
+
+      function markdragstart(event, ui){
+        // objectMoving=event.target.id;
+        // movementState.dragging[event.target.id] = true;
+      }
+      function markdragstop(event, ui){
+        // objectMoving="";
+      }
+      
+      function set_motionStop_bufferTime(elemId, time){
+        movementState.lastDate[elemId] = time;
+      }
+      function is_motionStop_bufferTime(elemId, dbDate){
+        if (elemId in movementState.lastDate
+          && movementState.lastDate[elemId] >= parseInt(dbDate))
+          return true;
+        else
+          return false;
+      }
+      
+      $(function() { 
+        $("#world img").draggable(); 
+        $("#world img").on("dragstart", function(event, ui) { markdragstart(event, ui); });
+        $("#world img").on("dragstop" , function(event, ui) { markdragstop(event, ui); });
+        $("#world img").on("drag"     , function(event, ui) { logDrag(event, ui); });
+        setInterval(requestAndUpdateUI, retreivingInterval);
+        setInterval(updateDB, 50);
+      });
+      
+
+      // function initializeUI(){
+      //   var tictacs = $(".draggable");
+      //   var dOffset = 30;
+      //   for (var t; t<tictacs.length; ++t){
+      //     $("#" + tictacs[t].id).offset({ top: t*30, left: 50});
+      //   }
+      //   $("#tttboard").offset({ top: 150, left: 150});
+      // }
+
+      function requestAndUpdateUI(){
+        $.get("e7get.php", {}, function(data){
+          var dbNewPositions = jQuery.parseJSON(data);
+          
+          $.each(dbNewPositions, function (key, value){
+            if( !is_motionStop_bufferTime(value.objectname, value.mtimestamp) ){
+				$("#" + value.objectname).stop();
+							
+				$("#" + value.objectname).animate({left: value.xpos, top: value.ypos}, retreivingInterval);
+            }
+          });
+
+        });
+      }
+      
+      function updateDB(){
+        $.get("e7set.php", {worldstate: JSON.stringify(newPositions)}, function(data){
+          //console.log(data);
+        });
+        //clear buffer
+        newPositions = {};
+      }
+      
+    </script>
+  </head>
+  <body>
+    <div id="world">
+      <img id="x1" src="images/x.gif" style="z-index:2;" class="draggable" />
+      <img id="x2" src="images/x.gif" style="z-index:2;" class="draggable" />
+      <img id="x3" src="images/x.gif" style="z-index:2;" class="draggable" />
+      <img id="x4" src="images/x.gif" style="z-index:2;" class="draggable" />
+      <img id="x5" src="images/x.gif" style="z-index:2;" class="draggable" />
+      <img id="o1" src="images/o.gif" style="z-index:2;" class="draggable" />
+      <img id="o2" src="images/o.gif" style="z-index:2;" class="draggable" />
+      <img id="o3" src="images/o.gif" style="z-index:2;" class="draggable" />
+      <img id="o4" src="images/o.gif" style="z-index:2;" class="draggable" />
+      <img id="o5" src="images/o.gif" style="z-index:2;" /class="draggable" >
+      <img id="tttboard" src="images/tictactoe.gif" style="z-index:1;" class="draggable" />
+    </div>
+  </body>
+</html>

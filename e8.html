@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shared Things</title>
+    <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.1/themes/base/jquery-ui.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="http://code.jquery.com/jquery-1.9.1.js"></script>
+    <script src="http://code.jquery.com/ui/1.10.1/jquery-ui.js"></script>
+    <script src="lib/jquery.ui.touch-punch.min.js"></script> <!-- http://touchpunch.furf.com/ -->
+    <style>
+      .draggable { position: fixed; } 
+    </style>
+  </head>
+  <body>
+    <header><h1>SharedThings Game</h1></header>
+    <div id="world">
+      <img id="x1" src="images/x.gif" style="z-index:2;" class="draggable" />
+      <img id="x2" src="images/x.gif" style="z-index:2;" class="draggable" />
+      <img id="x3" src="images/x.gif" style="z-index:2;" class="draggable" />
+      <img id="x4" src="images/x.gif" style="z-index:2;" class="draggable" />
+      <img id="x5" src="images/x.gif" style="z-index:2;" class="draggable" />
+      <img id="o1" src="images/o.gif" style="z-index:2;" class="draggable" />
+      <img id="o2" src="images/o.gif" style="z-index:2;" class="draggable" />
+      <img id="o3" src="images/o.gif" style="z-index:2;" class="draggable" />
+      <img id="o4" src="images/o.gif" style="z-index:2;" class="draggable" />
+      <img id="o5" src="images/o.gif" style="z-index:2;" /class="draggable" >
+      <img id="tttboard" src="images/tictactoe.gif" style="z-index:1;" class="draggable" />
+    </div>
+
+    <aside>
+    <div id="formdiv" class="rightSidebar">
+      <form id="form">
+        New World:<input type="text" id="newWorld">
+        <input type="button" value="Create" id="submitbutton">
+        </br>
+        
+        Or select a world here: 
+        <select id="worldList">
+
+        </select>
+      </form>
+    </div>
+    </aside>
+
+    <div class="shareurl">
+      <strong>Share this URL:</strong>
+      <div>
+        <span id="shareurl-span"></span>&nbsp;<input type="button" value="Copy" onclick="selectShareURL();"></input>
+      </div>
+    </div>
+
+  </body>
+
+  <script>//Script is put below body for better loading of webpage.
+
+    //Time interval for retreving from database and updating animation.
+    var retreivingInterval = 500;
+    //newPositions will be cleared during updateDB(). Do not store permanent local values here.
+    var newPositions = {};
+    
+    //For storing local values that will not be cleared.
+    // var objectMoving = "";
+    var movementState = {
+      // dragging: {},
+      //x : [false, false, false, false, false],
+      //o : [false, false, false, false, false],
+      lastDate: {}
+    };
+
+    var selectedWorld = "";
+    var boardTracker = new board();
+    var winMessage = true;
+
+    function logDrag(event, ui){
+      var time = new Date().getTime();
+      newPositions[event.target.id] = {"x": ui.position.left, "y": ui.position.top, "lastDate":time};
+      set_motionStop_bufferTime(event.target.id, time);
+
+
+    }
+
+    function markdragstart(event, ui){
+      // objectMoving=event.target.id;
+      // movementState.dragging[event.target.id] = true;
+    }
+    function markdragstop(event, ui){
+      // objectMoving="";
+      //Reject drag-drop if board grid is already occupied.
+      // var posx = 100+Math.random(200);
+      // var posy = 100+Math.random(200);
+      // if(boardTracker.gridOccupied(posx,posy)==0){
+      //   newPositions[event.target.id] = {"x": posx, "y": posy, "lastDate":time};
+      //   //$("#" + value.objectname).offset({ top: value.ypos, left: value.xpos});
+      //   //$("#" + value.objectname).animate({left: value.xpos, top: value.ypos}, 500);
+      // }
+      boardTracker.updateGridPositions();
+      if(boardTracker.isWonBy("x") && winMessage){
+        alert("Congratulations: X won!");
+        winMessage = false;
+      }
+      else if(boardTracker.isWonBy("o") && winMessage){
+        alert("Congratulations: O won!");
+        winMessage = false;
+      }
+    }
+    
+    function set_motionStop_bufferTime(elemId, time){
+      movementState.lastDate[elemId] = time;
+    }
+    function is_motionStop_bufferTime(elemId, dbDate){
+      if (elemId in movementState.lastDate
+        && movementState.lastDate[elemId] >= parseInt(dbDate))
+        return true;
+      else
+        return false;
+    }
+    
+    $(function() { 
+      $("#world img").draggable(); 
+      $("#world img").on("dragstart", function(event, ui) { markdragstart(event, ui); });
+      $("#world img").on("dragstop" , function(event, ui) { markdragstop(event, ui); });
+      $("#world img").on("drag"     , function(event, ui) { logDrag(event, ui); });
+      
+      var worldparam = window.location.search.replace( "?", "" );
+      if (worldparam != "")
+        selectedWorld = worldparam;
+      else
+        selectedWorld = "default";
+
+      updateWorldList();
+      setInterval(requestAndUpdateUI, retreivingInterval);
+      setInterval(updateDB, 50);
+      updateShareURL();
+      boardTracker.updateGridPositions();
+      if(boardTracker.isWonBy("x") && winMessage){
+        alert("Congratulations: X won!");
+        winMessage = false;
+      }
+      else if(boardTracker.isWonBy("o") && winMessage){
+        alert("Congratulations: O won!");
+        winMessage = false;
+      }
+      
+      $( "#submitbutton" ).click(function( event ) {
+        if($("#newWorld").val() != ""){
+          $.get("e8get.php", {opcode: "newworld", requestedworld: $("#newWorld").val()}, function(data){
+            selectedWorld = $("#newWorld").val();
+            updateWorldList();
+            updateShareURL();
+            movementState.lastDate = {};
+          });
+          
+        }
+        
+      });
+      
+      $( "#worldList" ).change(function() {
+        console.log($( "#worldList" ).val());
+        selectedWorld = $( "#worldList" ).val();
+        updateShareURL();
+        movementState.lastDate = {};
+      });
+      
+      
+    });
+    function updateWorldList(){
+      $.get("e8get.php", {opcode: "getworldlist"}, function(data){
+        var worldList = jQuery.parseJSON(data);
+        
+        $("#worldList").empty();
+        
+        $.each(worldList, function(key, value){
+            $("#worldList").append("<option value = "+value.world+">"+value.world+"</option>");
+        });
+        $("#worldList").val(selectedWorld);
+        
+      });
+    }
+    
+    function requestAndUpdateUI(){
+      $.get("e8get.php", {requestedworld : selectedWorld}, function(data){
+        if(data == "false"){
+          selectedWorld = "default";
+        }
+        
+        var dbNewPositions = jQuery.parseJSON(data);
+        $.each(dbNewPositions, function (key, value){
+          if( !is_motionStop_bufferTime(value.objectname, value.mtimestamp) ){
+            $("#" + value.objectname).stop();
+            $("#" + value.objectname).animate({left: value.xpos, top: value.ypos}, retreivingInterval);
+            //removing the line below will cause a weird glitch
+            set_motionStop_bufferTime(value.objectname, value.mtimestamp);
+          }
+        });
+
+      });
+    }
+    
+    function updateDB(){
+      $.get("e8set.php", {worldstate: JSON.stringify(newPositions), requestedworld: selectedWorld}, function(data){
+        //console.log(data);
+      });
+      //clear buffer
+      newPositions = {};
+    }
+
+    function updateShareURL(){
+      var shareurl = window.location.href;
+      var param = window.location.search.replace( "?", "" );
+      if (param != selectedWorld){
+        shareurl = window.location.href.replace( /\?\S+/, "" )  +"?"+selectedWorld;
+        window.location.href = shareurl;
+      }
+      
+      //Add bitly integration if there's time. It requires edits to backend php.
+      $("#shareurl-span").text(shareurl);
+    }
+    function selectShareURL(){
+      window.prompt("Copy to clipboard: Ctrl+C, Enter", $("#shareurl-span").text() );
+    }
+
+    //=== Class: grid =========================
+    function grid(top,left){ //,width,height
+      this.top = top;
+      this.left = left;
+      //Store in board since width and height is same for all grids.
+      //Dont store width height here.
+      // this.w = width;
+      // this.h = height;
+    }
+
+    //=== Class: board =========================
+    function board(){
+      this.grids = [];
+      this.grids[0] = false;
+      for(var i=0+1; i<9+1; ++i){
+        this.grids[i] = new grid( 0,0 );
+      }
+
+      this.updateGridPositions = function(){
+        this.top = $("#tttboard").offset().top;//style.top;
+        this.left = $("#tttboard").offset().left;//style.left;
+        this.widthUnit = $("#tttboard").width()/3;
+        this.heightUnit = $("#tttboard").height()/3;
+        for(var clm=0; clm<3; ++clm){
+          for(var row=0; row<3; ++row){
+            var num = (row*3)+(clm+1);
+            //console.log(this.top +" "+(row*this.heightUnit));
+            var gridTop = this.top+ (row*this.heightUnit);
+            var gridLeft = this.left+ (clm*this.widthUnit);
+            this.grids[num].top = gridTop;
+            this.grids[num].left = gridLeft;
+          }
+        }
+
+      }
+      this.logGridPositions = function(){
+        //console.log("The TTT Board has been shifted.");
+        console.log("T"+this.top+" L-"+this.left+" "+this.widthUnit+" "+this.heightUnit);
+        console.log(this.grids);
+      }
+
+      //--- Grid Tracking ----------
+      this.isOverlapGrid=function(num, x,y){ //Note: num not arrayIdx
+        if ( y>this.grids[num].top  && y<(this.grids[num].top +this.heightUnit)
+          && x>this.grids[num].left && x<(this.grids[num].left +this.widthUnit)  )
+          return true;
+        else
+          return false;
+      }
+      this.testisOverlapGrid = function(num, x,y){
+        console.log(num +" "+x +" "+ y);
+        console.log(this.grids[num].top);
+        console.log(this.grids[num].left);
+        console.log(y>this.grids[num].top);
+        console.log(y<(this.grids[num].top+this.heightUnit));
+        console.log(x>this.grids[num].left);
+        console.log(x<(this.grids[num].left+this.widthUnit));
+      }
+
+      this.whichGridNum = function(x,y){
+        for(var num=0+1; num<9+1; ++num){
+          //console.log(num);
+          if (this.isOverlapGrid(num, x,y))
+            return num;
+        }
+        //else if nothing is found after looping through all elements
+        return 0;
+      }
+
+      //--- Win Verification ----------
+      var WIN_COMBI = [
+        [1,2,3], [4,5,6], [7,8,9],
+        [1,4,7], [2,5,8], [3,6,9],
+        [1,5,9], [3,5,7]
+      ];
+      var WIN_COMBI_DICT = {};
+      for(var i=0; i<WIN_COMBI.length; ++i){
+        //encode
+        WIN_COMBI_DICT[""] = true;
+      }
+
+      function isWinCombi(combiArray){
+        var flag = false;
+        for(var i=0; i<WIN_COMBI.length; ++i){
+          var count=0;
+          for(var j=0; j<WIN_COMBI[i].length; ++j){
+            if(combiArray[j]==WIN_COMBI[i][j])
+              count = count+1;
+          }
+          if(count==3)
+            flag=true;
+        }
+        return flag;
+      }
+
+      function isWinCombi_v2(combiArray){ //this is not working yet. this was not submitted.
+        var flag = false;
+        for(var i=0; i<WIN_COMBI.length; ++i){
+          var count=0;
+          var k=0;
+          for(var j=0; j<WIN_COMBI[i].length; ++j){
+            console.log("-----");
+            console.log(WIN_COMBI[i][j]);
+            console.log(k+" "+combiArray[k]);
+            console.log("=====");
+            if(combiArray[k]==WIN_COMBI[i][j]){
+              count = count+1;
+            }
+            if (combiArray.length==3)
+              k += 1;
+            else if (combiArray.length>3){
+              var tryNext=0;
+              while ((j+tryNext+1)<combiArray.length){
+                tryNext+=1;
+                if(combiArray[j+tryNext]==WIN_COMBI[i][j]){
+                  //console.log(combiArray[j+tryNext]);
+                  k+=tryNext;
+                  break;
+                }
+              }
+            }
+
+          }
+          if(count==3)
+            flag=true;
+        }
+        return flag;
+      }
+
+      //--- Winner Determination ----------
+      this.isWonBy = function(xo){
+        var currCombi = [];
+        xo_widthHalf = $("#"+xo+1).width()/2;
+        xo_heightHalf = $("#"+xo+1).height()/2;
+        for(var i=0+1; i<5+1; ++i){
+          var posx = $("#"+xo+i).offset().left + xo_widthHalf;
+          var posy = $("#"+xo+i).offset().top + xo_heightHalf;
+          var gridNum = this.whichGridNum(posx,posy);
+          //console.log(gridNum);
+          if(gridNum !=0) //remove 0 from currCombi
+            currCombi.push( gridNum );
+        }
+        currCombi.sort();
+        console.log(currCombi);
+        if (isWinCombi(currCombi))
+          return true;
+        else
+          return false;
+      }
+
+      //--- Exposed Functions ----------
+      this.winnerSide = function(){
+        if (isWonBy("x"))
+          return "x";
+        else if (isWonBy("o"))
+          return "o";
+        else
+          return "";
+      }
+      this.isWon = function(){
+        if (isWonBy("x")){
+          return true;}
+        else if(isWonBy("o")){
+          return true;}
+        else{
+          return false;}
+      }
+
+    }//endof class board
+    
+  </script>
+
+
+</html>
